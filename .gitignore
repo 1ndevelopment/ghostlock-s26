@@ -1,0 +1,17 @@
+*.iml
+.gradle/
+build/
+local.properties
+.DS_Store
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+# NDK outputs are staged into assets explicitly via stage-assets.sh;
+# keep the script outputs out of git until staged on purpose.
+exploit/build/
+app/src/main/assets/preload.so
+app/src/main/assets/su_daemon
+# ksud (upstream prebuilt) IS tracked — required at runtime.
+!app/src/main/assets/ksud

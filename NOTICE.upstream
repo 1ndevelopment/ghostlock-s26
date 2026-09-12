@@ -1,0 +1,16 @@
+ghostlock-s26
+Copyright 2026
+
+CVE-2026-43499 ported to the Samsung Galaxy S26 series, built on the
+CyberMeowfia-s26 baseline with every mechanism rewritten for the S26 target.
+
+## Third-party notices
+
+| Component                                              | Upstream                    | License    |
+| ------------------------------------------------------ | --------------------------- | ---------- |
+| Tracefs slide, walk timing oracle, stale-page handling | polygraphene/CyberMeowfia   | Apache-2.0 |
+| KernelSnitch (mm_struct futex-hash leak)               | lukasmaar/kernelsnitch      | MIT        |
+| per-child lock regions, UMH root, boot-claim gating    | monovibe/s26u-m3q-temp-root | Apache-2.0 |
+
+The vendored KernelSnitch retains its MIT copyright notice in
+`exploit/src/kernelsnitch/`. No other third-party subtree is imported.
