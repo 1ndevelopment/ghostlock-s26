@@ -4,6 +4,8 @@
     <!-- Query Shizuku manager so we can bind to it when installed. -->
     <queries>
         <package android:name="moe.shizuku.privileged.api" />
+        <!-- Detect an existing KernelSU Manager install (package visibility). -->
+        <package android:name="me.weishu.kernelsu" />
     </queries>
 
     <!-- Needed to check whether the su daemon socket is alive. Localhost
@@ -12,6 +14,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <!-- Shizuku permission: lets Shizuku grant us the shell token. -->
     <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
+    <!-- PackageInstaller install of the bundled KernelSU Manager APK. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:allowBackup="false"
@@ -40,5 +44,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Receives the PackageInstaller result for the KernelSU Manager
+             install and reports it to the user. -->
+        <receiver
+            android:name=".InstallReceiver"
+            android:exported="false" />
     </application>
 </manifest>

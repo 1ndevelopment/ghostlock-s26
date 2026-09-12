@@ -1,11 +1,15 @@
 package indev.ghostlock.s26
 
+import android.app.AlertDialog
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Typeface
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import android.text.Spannable
 import android.text.SpannableStringBuilder
 import android.text.style.ForegroundColorSpan
@@ -266,7 +270,7 @@ class MainActivity : AppCompatActivity() {
             bootForce = force,
             debug = false,
             preferShizuku = useShizuku,
-            onLine = ::logLine,
+            onLine = ::logNative,
             onAttempt = { i, o ->
                 val txt = when (o) {
                     is GhostlockManager.AttemptOutcome.Success -> "Attempt $i: SUCCESS"
@@ -281,6 +285,7 @@ class MainActivity : AppCompatActivity() {
             is GhostlockManager.AttemptOutcome.Success -> {
                 markRooted(outcome.via)
                 log("Temporary root granted (${outcome.via}). It vanishes on reboot.")
+                promptKernelSuInstall()
             }
             is GhostlockManager.AttemptOutcome.Failed -> {
                 status("Exit ${outcome.exitCode}: ${shortAdvice(outcome.exitCode)}", android.R.color.holo_orange_light)
@@ -295,6 +300,53 @@ class MainActivity : AppCompatActivity() {
             preferShizuku = useShizuku,
         )
         log("boot log: " + r.output.trim().replace("\n", " | "))
+    }
+
+    /** Ask to install the bundled KernelSU Manager once root is up. */
+    private fun promptKernelSuInstall() {
+        if (KernelSuInstaller.isInstalled(this)) {
+            log("KernelSU Manager already installed.")
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Install KernelSU Manager?")
+            .setMessage(
+                "KernelSU Manager (me.weishu.kernelsu) is bundled with this app. " +
+                    "Install it to manage root access?"
+            )
+            .setPositiveButton("Install") { _, _ -> installKernelSu() }
+            .setNegativeButton("Later", null)
+            .show()
+    }
+
+    private fun installKernelSu() {
+        if (!KernelSuInstaller.canRequestInstalls(this)) {
+            AlertDialog.Builder(this)
+                .setTitle("Allow installs from this app")
+                .setMessage(
+                    "Android requires permission to install apps. " +
+                        "Open settings and allow 'Install unknown apps' for GhostLock."
+                )
+                .setPositiveButton("Open settings") { _, _ ->
+                    startActivity(
+                        Intent(
+                            Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                            Uri.parse("package:$packageName")
+                        )
+                    )
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+            return
+        }
+        lifecycleScope.launch {
+            log("Installing KernelSU Manager…")
+            if (KernelSuInstaller.install(this@MainActivity)) {
+                log("Install prompt sent - confirm on screen.")
+            } else {
+                log("KernelSU Manager install failed to start - try again.")
+            }
+        }
     }
 
     private suspend fun execAsRoot() {
@@ -358,18 +410,32 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun logLine(s: String) {
+        renderLog(s, withTimestamp = true)
+    }
+
+    /** preload.so output lines: rendered without any timestamp. */
+    private fun logNative(s: String) {
+        renderLog(s, withTimestamp = false)
+    }
+
+    private fun renderLog(s: String, withTimestamp: Boolean) {
         runOnUiThread {
+            // preload.so lines carry native ANSI colors; strip the escapes
+            // (the app colors via styleFor).
+            val text = stripAnsi(s)
             val sb = SpannableStringBuilder()
-            val ts = tsFormat.format(Date())
-            sb.append(ts)
-            sb.setSpan(
-                ForegroundColorSpan(getColor(R.color.muted)),
-                0, ts.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
-            )
-            sb.append("  ")
+            if (withTimestamp) {
+                val ts = tsFormat.format(Date())
+                sb.append(ts)
+                sb.setSpan(
+                    ForegroundColorSpan(getColor(R.color.muted)),
+                    0, ts.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+                sb.append("  ")
+            }
             val lineStart = sb.length
-            sb.append(s)
-            val style = styleFor(s)
+            sb.append(text)
+            val style = styleFor(text)
             sb.setSpan(
                 ForegroundColorSpan(getColor(style.colorRes)),
                 lineStart, sb.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
@@ -385,6 +451,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** ANSI SGR escapes emitted by the native log (e.g. `\033[31m`). */
+    private val ansiRegex = Regex("\u001B\\[[0-9;]*m")
+
+    private fun stripAnsi(line: String): String = line.replace(ansiRegex, "")
+
     private data class LogStyle(val colorRes: Int, val bold: Boolean = false)
 
     /** Map a log line to its terminal-ish color. Order matters (first match wins). */
@@ -394,6 +465,8 @@ class MainActivity : AppCompatActivity() {
             t.contains("failed") || t.contains("error") || t.contains("unsupported") ||
                 t.contains("no root channel") || t.contains("unavailable") ||
                 t.contains("no shell channel") || t.contains("cannot") -> LogStyle(R.color.danger)
+            // Match the "SUPPORTED" verdict color (holo_green_light).
+            t.contains("jailbreak complete") -> LogStyle(android.R.color.holo_green_light)
             t.contains("success") || t.contains("granted") || t.contains("rooted") ||
                 t.contains("stage ok") || t.contains("uid=0") || t.contains("exit 0") ||
                 t.contains("removed") -> LogStyle(R.color.accent)
