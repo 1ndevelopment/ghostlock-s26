@@ -7,4 +7,6 @@
     <color name="danger">#F87171</color>
     <color name="muted">#9AA4B2</color>
     <color name="log_bg">#05070B</color>
+    <color name="log_cmd">#38BDF8</color>
+    <color name="log_normal">#D1D5DB</color>
 </resources>

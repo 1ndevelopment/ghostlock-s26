@@ -1,14 +1,14 @@
-# GhostLock S26 — Android wrapper (`indev.ghostlock.s26`)
+# GhostLock - Android wrapper (`indev.ghostlock.s26`)
 
 One-click Android wrapper for
 [1ndevelopment/ghostlock-s26](https://github.com/1ndevelopment/ghostlock-s26):
 GhostLock (CVE-2026-43499) ported to the **whole Samsung Galaxy S26 series**
 (Android 16 / GKI 6.12). One APK, three kernel lines, runtime parameter
-matching — no per-build app variants.
+matching - no per-build app variants.
 
 > Use only on devices you own or are explicitly authorized to test.
 > Temp root vanishes on reboot. A second exploit run in the same boot can
-> crash the device — reboot before retrying.
+> crash the device - reboot before retrying.
 
 ## Coverage: the full S26 family
 
@@ -33,42 +33,42 @@ S948USQS4AZG3.
 Unknown OTAs fall back exactly like upstream `params.c`: exact build first,
 then same model + 3-char CSC (OTA reuse), then latest same-device entry
 (flagged unverified), else **fail-closed** (the app shows UNSUPPORTED and the
-native layer exits 2). Completely unknown models are refused — never forced.
+native layer exits 2). Completely unknown models are refused - never forced.
 
 ## What the app does
 
-One big button — **Root my S26** — runs the whole pipeline and narrates into
+One big button - **Root my S26** - runs the whole pipeline and narrates into
 the Output card:
 
-1. **Device check** — model/device/incremental/fingerprint plus the series
+1. **Device check** - model/device/incremental/fingerprint plus the series
    verdict (exact / OTA-reuse / unverified guess / unsupported). Unsupported
    builds stop here (fail-closed, no boot-claim burned).
-2. **Shizuku** — used automatically when connected (uid 2000 shell, same
+2. **Shizuku** - used automatically when connected (uid 2000 shell, same
    context family as the README's `adb shell` flow). Permission is requested
    once at launch (and again if the server restarts); the Root flow waits for
    the grant instead of bailing. If the server is down the app opens the
    Shizuku manager so you can start it, then falls back to the in-app shell.
    Adding the app to Shizuku's allowlist removes the prompt entirely.
-3. **Stage** — copies `preload.so`, `su_daemon`, `ksud` to `/data/local/tmp`
+3. **Stage** - copies `preload.so`, `su_daemon`, `ksud` to `/data/local/tmp`
    (`preload.so`, `cve-2026-43499-root`, `ksud`) and `chmod`s them. If you
    already `adb push`ed the files per the upstream README, they are picked up
    in place.
-4. **Run** — executes exactly what upstream documents:
+4. **Run** - executes exactly what upstream documents:
    `env LD_PRELOAD=/data/local/tmp/preload.so sh` (the `.so` constructor runs
-   the chain and `_exit`s; stdout *is* the exploit log), up to 5 attempts —
+   the chain and `_exit`s; stdout *is* the exploit log), up to 5 attempts -
    the race is probabilistic. A `BOOT_FORCE=1` switch is available but
    rebooting is safer.
-5. **Verify** — confirms `id` reports `uid=0` through **any** channel:
+5. **Verify** - confirms `id` reports `uid=0` through **any** channel:
    temp-daemon socket first, then KernelSU-style `su`. This matters because on
    a full success su_daemon **unlinks its socket and exits by design**
-   (handover to KernelSU) — a dead temp socket with working `su` means
+   (handover to KernelSU) - a dead temp socket with working `su` means
    rooted, not broken. Prints the boot-claim log tail and reports rooted /
    exit-code advice.
 
 Below that: a single **command field + Run as root** row (one-shot commands
 via the su daemon's `C` protocol; interactive PTY is out of scope for v1),
 and a small **Reset** link that clears `/data/local/tmp/ghostlock-boot.log`
-so a run can be retried without rebooting (upstream warns this may panic —
+so a run can be retried without rebooting (upstream warns this may panic -
 reboot is the safe path).
 
 ## Project layout
@@ -115,7 +115,7 @@ from the same sources inside the APK as a fallback.
 ## On-device build (Termux, aarch64)
 
 The SDK's `aapt2`/NDK are x86_64 and cannot execute on-device. Verified
-procedure (SDK at `~/android-sdk`, Gradle 8.9 — AGP 8.5.2 rejects the
+procedure (SDK at `~/android-sdk`, Gradle 8.9 - AGP 8.5.2 rejects the
 system Gradle 9.x):
 
 ```bash
@@ -142,10 +142,10 @@ env ANDROID_HOME=~/android-sdk ANDROID_SDK_ROOT=~/android-sdk \
 
 1. Install the APK on the S26 device + install/start
    [Shizuku](https://shizuku.rikka.app/) (wireless debugging or PC).
-2. Open GhostLock S26 — Shizuku permission is requested automatically at
+2. Open GhostLock - Shizuku permission is requested automatically at
    launch; approve it once (it lasts until the Shizuku server restarts).
 3. Check the Device card says SUPPORTED/LIKELY for your build.
-4. Tap **Stage**, then **Run once**. The race is probabilistic — use
+4. Tap **Stage**, then **Run once**. The race is probabilistic - use
    **Retry ×5**; several attempts are normal.
 5. **Check root** → expect `uid=0 …`. Then run commands in the Root shell card.
 6. After success, install/enjoy KernelSU Manager (`me.weishu.kernelsu`);
@@ -170,7 +170,7 @@ Shizuku is optional but strongly recommended: the upstream flow runs from an
 
 - Exploit: `exploit/` + `PORTING.upstream.md` + `ksud` from
   `1ndevelopment/ghostlock-s26` (Apache-2.0; see `LICENSE.upstream`,
-  `NOTICE.upstream`). The app links no exploit code into its own process —
+  `NOTICE.upstream`). The app links no exploit code into its own process -
   it stages the NDK-built files and spawns the documented `LD_PRELOAD` shell.
 - Credits (upstream): Nebula Security (CVE discovery), polygraphene
   (baseline), monovibe (UMH root / boot-claim), lukasmaar (kernelsnitch),

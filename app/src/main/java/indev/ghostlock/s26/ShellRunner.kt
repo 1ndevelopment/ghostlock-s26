@@ -90,7 +90,7 @@ object ShellRunner {
 
     /**
      * The exploit entrypoint. preload.so's constructor runs the full chain
-     * and _exit()s, so the `sh` process never interprets anything — its
+     * and _exit()s, so the `sh` process never interprets anything - its
      * stdout IS the exploit log. Must be exactly:
      *   env LD_PRELOAD=/data/local/tmp/preload.so sh
      */
@@ -341,7 +341,7 @@ object ShellRunner {
             }
         }
         if (!hasHelper) {
-            log("su_daemon asset missing — run exploit/stage-assets.sh with the NDK, " +
+            log("su_daemon asset missing - run exploit/stage-assets.sh with the NDK, " +
                 "or adb-push a Makefile-built su_daemon_aarch64_pie to $HELPER_PATH first.")
         }
         return out
@@ -355,7 +355,7 @@ object ShellRunner {
             "/data/app/*/indev.ghostlock.s26*/lib/arm64/libpreload.so",
         )
         // Direct check via nativeLibraryDir is done by the caller when available;
-        // here do a cheap glob over /data/app (may fail under SELinux — non-fatal).
+        // here do a cheap glob over /data/app (may fail under SELinux - non-fatal).
         return try {
             val proc = ProcessBuilder("sh", "-c", "ls ${candidates.joinToString(" ")} 2>/dev/null | head -n 1")
                 .redirectErrorStream(true).start()

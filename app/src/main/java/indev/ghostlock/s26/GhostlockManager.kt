@@ -6,11 +6,11 @@ import kotlinx.coroutines.delay
  * Orchestrates stage -> run -> verify, interpreting the native exit codes
  * (see run_exploit / preload.c):
  *  0  success (su socket up, ksud late-load OK)
- *  1  race failed / ksud verify failed — retry after REBOOT is pointless for
+ *  1  race failed / ksud verify failed - retry after REBOOT is pointless for
  *     the race itself; just retry (probabilistic), it usually takes several.
- *  2  unsupported build (fail-closed) — do NOT retry, port needed
- *  3  carrier/root failed — reboot keeper required, retry risky
- *  4  boot-claim reject: already ran this boot — reboot before retry
+ *  2  unsupported build (fail-closed) - do NOT retry, port needed
+ *  3  carrier/root failed - reboot keeper required, retry risky
+ *  4  boot-claim reject: already ran this boot - reboot before retry
  */
 object GhostlockManager {
 
@@ -22,11 +22,11 @@ object GhostlockManager {
     }
 
     fun adviceFor(exitCode: Int): String = when (exitCode) {
-        0 -> "Success. su daemon should be listening now — press 'Check root'."
+        0 -> "Success. su daemon should be listening now - press 'Check root'."
         2 -> "Unsupported build (fail-closed). Do not force; this firmware needs a port (see PORTING.upstream.md)."
         4 -> "Boot-claim reject: an attempt already ran this boot. REBOOT, then try again. BOOT_FORCE=1 overrides but may panic the device."
         3 -> "Carrier/root stage failed. Upstream notes a reboot keeper may be required; reboot before the next try."
-        else -> "Race missed (probabilistic) — just retry. Several attempts are normal."
+        else -> "Race missed (probabilistic) - just retry. Several attempts are normal."
     }
 
     suspend fun runOnce(
@@ -40,7 +40,7 @@ object GhostlockManager {
         if (r.exitCode == 0) delay(800)
         // NOTE: on a full success the temp daemon already unlinked its socket
         // and handed over to KernelSU, so verify through ANY channel (temp
-        // socket first, then su) — not the socket alone.
+        // socket first, then su) - not the socket alone.
         val root = try {
             SuClient.execRoot("id", preferShizuku)
         } catch (_: Exception) {
@@ -71,7 +71,7 @@ object GhostlockManager {
     ): AttemptOutcome {
         var last: AttemptOutcome = AttemptOutcome.Failed(-1, "", "no attempts ran")
         for (i in 1..times) {
-            onLine("—— attempt $i/$times ——")
+            onLine("-- attempt $i/$times --")
             val o = runOnce(bootForce, debug, preferShizuku, onLine)
             last = o
             onAttempt(i, o)

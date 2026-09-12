@@ -60,7 +60,7 @@ android {
     // Optional CMake rebuild of preload.so from exploit/src. Enabled only when
     // a runnable SDK cmake + NDK are present (x86_64 workstation). On hosts
     // without them (e.g. on-device builds) the APK falls back to the
-    // stage-assets.sh outputs in src/main/assets — no native step needed.
+    // stage-assets.sh outputs in src/main/assets - no native step needed.
     // Override with -PforceNative=true to force-enable.
     val sdkDirProp = project.findProperty("sdk.dir") as String?
         ?: System.getenv("ANDROID_HOME")
@@ -86,7 +86,7 @@ dependencies {
     implementation(libs.lifecycle.runtime)
     implementation(libs.coroutines.android)
     // Shizuku: preferred execution path (uid 2000 shell, same context as
-    // the README's `adb shell` flow). Optional at runtime — the app works
+    // the README's `adb shell` flow). Optional at runtime - the app works
     // without it, but the in-app fallback is less likely to succeed.
     implementation(libs.shizuku.api)
     implementation(libs.shizuku.provider)

@@ -16,7 +16,7 @@ A new kernel binary (new line) additionally needs the per-line table below re-de
 
 | Field                       | Source                                                                                                                                 |
 | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `tracefs_event_id`          | runtime id of the `sched_blocked_reason` trace event — read it from the device tracefs (authoritative) or derive offline from kallsyms |
+| `tracefs_event_id`          | runtime id of the `sched_blocked_reason` trace event - read it from the device tracefs (authoritative) or derive offline from kallsyms |
 | `tracefs_worker_caller_off` | kallsyms + disassembly of `worker_thread`: the instruction after the blocking `bl schedule` (the recorded caller is the return PC)     |
 
 ### Seed symbols (kallsyms)
@@ -47,7 +47,7 @@ A new kernel binary (new line) additionally needs the per-line table below re-de
 | Field                               | Purpose                                        |
 | ----------------------------------- | ---------------------------------------------- |
 | `call_usermodehelper_exec_work_off` | forged `work.func`                             |
-| `system_unbound_wq_off`             | workqueue topology root — **differs per line** |
+| `system_unbound_wq_off`             | workqueue topology root - **differs per line** |
 | `selinux_enforcing_off`             | `selinux_state.enforcing` (permissive write)   |
 
 ### Device-verified
@@ -59,14 +59,14 @@ A new kernel binary (new line) additionally needs the per-line table below re-de
 ## Fixed constants (`params.h`)
 
 `KIMAGE_TEXT_BASE`, `P0_PAGE_OFFSET`, `P0_PHYS_OFFSET`, `P0_KERNEL_PHYS_LOAD`,
-`KERNELSNITCH_IDENTITY_START/END`, `DIRECT_MAP_BASE/END`, `VMEMMAP_START` — stable on the
+`KERNELSNITCH_IDENTITY_START/END`, `DIRECT_MAP_BASE/END`, `VMEMMAP_START` - stable on the
 Samsung 6.12 GKI family; re-check only when moving to a new kernel family.
 
 ## Layout and BTF constants
 
 - Payload page layout (`LOCK_OFF`/`W0_OFF`/`FAKE_TASK_OFF`/`FOPS_OFF`/attr carrier offsets)
 - Kernel struct layouts (`WQ_*`, `PWQ_*`, `POOL_*`, `WORK_*`, `FOPS_*`, `FAKE_WAITER_*`,
-  `FAKE_TASK_*`): derived from the BTF embedded in the kernel image — re-verify with BTF
+  `FAKE_TASK_*`): derived from the BTF embedded in the kernel image - re-verify with BTF
   when changing the route or porting to a new kernel family.
 
 ## Reference values (current targets)
@@ -104,7 +104,7 @@ on that line.
 
 ## Sources at a glance
 
-- **kallsyms** — from the boot image kernel: all `*_off` symbol offsets.
-- **BTF** — embedded in the kernel image: struct layouts.
-- **tracefs** — the `sched_blocked_reason` event id can be read from the device.
-- **On-device verification** — `uinput_minor`, `system_unbound_wq_off` (per-line values).
+- **kallsyms** - from the boot image kernel: all `*_off` symbol offsets.
+- **BTF** - embedded in the kernel image: struct layouts.
+- **tracefs** - the `sched_blocked_reason` event id can be read from the device.
+- **On-device verification** - `uinput_minor`, `system_unbound_wq_off` (per-line values).

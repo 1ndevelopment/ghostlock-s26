@@ -10,12 +10,12 @@ import java.nio.ByteOrder
 /**
  * Root command execution with two channels:
  *
- *  1. temp-daemon — su_daemon at /data/local/tmp/temp_su.sock ('C' mode).
+ *  1. temp-daemon - su_daemon at /data/local/tmp/temp_su.sock ('C' mode).
  *     Alive between the UMH exec and the KernelSU late-load.
- *  2. su — KernelSU (or other) su binary. This is the steady state: on a
+ *  2. su - KernelSU (or other) su binary. This is the steady state: on a
  *     FULL success su_daemon unlinks its socket and exits by design
  *     (see serve_one() 'K' mode), handing over to KernelSU. Knocking on the
- *     temp socket after that will always fail — that means rooted, not broken.
+ *     temp socket after that will always fail - that means rooted, not broken.
  */
 object SuClient {
 
@@ -63,7 +63,7 @@ object SuClient {
 
         // Dynamic discovery first: whatever `su` the shell resolves wins over
         // the static list (covers Magisk/APatch/KernelSU install locations).
-        // Also probe for toybox `timeout` — if it's missing, skip the guard
+        // Also probe for toybox `timeout` - if it's missing, skip the guard
         // prefix entirely (a missing `timeout` would otherwise fail EVERY
         // candidate with 127 and look like "no root").
         val discovery: ShellRunner.Result = try {

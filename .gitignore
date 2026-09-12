@@ -13,5 +13,5 @@ captures/
 exploit/build/
 app/src/main/assets/preload.so
 app/src/main/assets/su_daemon
-# ksud (upstream prebuilt) IS tracked — required at runtime.
+# ksud (upstream prebuilt) IS tracked - required at runtime.
 !app/src/main/assets/ksud

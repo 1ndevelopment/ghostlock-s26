@@ -47,21 +47,21 @@ object DeviceCompat {
         }
         return when (val m = ParamsTable.match(i.incremental, i.device, i.model)) {
             is ParamsTable.Match.Exact ->
-                "SUPPORTED — Galaxy S26 series\n" +
+                "SUPPORTED - Galaxy S26 series\n" +
                     "device=${m.entry.device} build=${m.entry.buildId} line=${m.entry.line} (exact match)" to true
             is ParamsTable.Match.ModelCscFallback ->
-                "LIKELY (OTA reuse) — Galaxy S26 series\n" +
+                "LIKELY (OTA reuse) - Galaxy S26 series\n" +
                     "build ${i.incremental} not listed; same model+CSC as ${m.fromBuild} → line=${m.entry.line}.\n" +
                     "Native layer decides; may still refuse (fail-closed)." to true
             is ParamsTable.Match.SameDeviceFallback ->
-                "GUESS (unverified) — Galaxy S26 series\n" +
+                "GUESS (unverified) - Galaxy S26 series\n" +
                     "device=${i.device} incremental=${i.incremental} unknown; " +
                     "would assume line=${m.entry.line} from latest entry ${m.entry.buildId}.\n" +
                     "Native layer decides; may refuse (fail-closed)." to true
             ParamsTable.Match.Unsupported ->
-                "UNSUPPORTED — not a known Galaxy S26 build\n" +
+                "UNSUPPORTED - not a known Galaxy S26 build\n" +
                     "device=${i.device} incremental=${i.incremental} model=${i.model}.\n" +
-                    "Exploit will exit 2 (fail-closed). This firmware needs a port — see PORTING.upstream.md." to false
+                    "Exploit will exit 2 (fail-closed). This firmware needs a port - see PORTING.upstream.md." to false
         }
     }
 }
