@@ -33,7 +33,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="CVE-2026-43499 · Galaxy S26 family"
+                android:text="CVE-2026-43499"
                 android:textColor="@color/muted"
                 android:textSize="12sp" />
         </LinearLayout>
@@ -60,19 +60,6 @@
                 android:textSize="11sp" />
         </LinearLayout>
     </LinearLayout>
-
-    <!-- Safety warning -->
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="@color/card"
-        android:paddingStart="16dp"
-        android:paddingEnd="16dp"
-        android:paddingTop="6dp"
-        android:paddingBottom="6dp"
-        android:text="Use only on devices you own. Temp root vanishes on reboot. If an attempt already ran this boot, reboot before retrying."
-        android:textColor="@color/warn"
-        android:textSize="11sp" />
 
     <!-- Live status line -->
     <TextView
@@ -203,7 +190,7 @@
                         android:id="@+id/cmdInput"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="id; getenforce"
+                        android:text="id; setenforce 0; getenforce"
                         android:typeface="monospace" />
                 </com.google.android.material.textfield.TextInputLayout>
                 <com.google.android.material.button.MaterialButton

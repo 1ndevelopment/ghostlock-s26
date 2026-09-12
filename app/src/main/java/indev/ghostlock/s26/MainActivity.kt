@@ -62,9 +62,17 @@ class MainActivity : AppCompatActivity() {
 
         // Edge-to-edge: draw behind the status/nav bars and pad the page by
         // the system-bar insets (incl. cutout) so nothing hides underneath.
+        // IME insets push the whole screen up when the keyboard opens
+        // (adjustResize alone is ignored on Android 15+ edge-to-edge).
         ViewCompat.setOnApplyWindowInsetsListener(b.outerScroll) { v, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            v.updatePadding(left = bars.left, top = bars.top, right = bars.right, bottom = bars.bottom)
+            val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
+            v.updatePadding(
+                left = bars.left,
+                top = bars.top,
+                right = bars.right,
+                bottom = bars.bottom.coerceAtLeast(ime.bottom)
+            )
             insets
         }
 
