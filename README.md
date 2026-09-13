@@ -1,3 +1,10 @@
+```
+  ___        __                      __            __  __         __               ___  ____
+ <  /__  ___/ /__ _  __        ___ _/ /  ___  ___ / /_/ /__  ____/ /__        ___ |_  |/ __/
+ / / _ \/ _  / -_) |/ /  _    / _ `/ _ \/ _ \(_-</ __/ / _ \/ __/  '_/  _    (_-</ __// _ \
+/_/_//_/\_,_/\__/|___/  (_)   \_, /_//_/\___/___/\__/_/\___/\__/_/\_\  (_)  /___/____/\___/
+                             /___/
+```
 # GhostLock - Android wrapper (`indev.ghostlock.s26`)
 
 One-click Android wrapper for
@@ -168,6 +175,7 @@ Shizuku is optional but strongly recommended: the upstream flow runs from an
 
 ## Provenance
 
+
 - Exploit: `exploit/` + `PORTING.upstream.md` + `ksud` from
   `1ndevelopment/ghostlock-s26` (Apache-2.0; see `LICENSE.upstream`,
   `NOTICE.upstream`). The app links no exploit code into its own process -
@@ -175,3 +183,13 @@ Shizuku is optional but strongly recommended: the upstream flow runs from an
 - Credits (upstream): Nebula Security (CVE discovery), polygraphene
   (baseline), monovibe (UMH root / boot-claim), lukasmaar (kernelsnitch),
   veritas501 (pipe concept), BuSung-dev (companion-app base).
+
+- Android app brought to you by:
+  
+```
+  ___        __             __                         __
+ <  /__  ___/ /__ _  _____ / /__  ___  __ _  ___ ___  / /_
+ / / _ \/ _  / -_) |/ / -_) / _ \/ _ \/  ' \/ -_) _ \/ __/
+/_/_//_/\_,_/\__/|___/\__/_/\___/ .__/_/_/_/\__/_//_/\__/
+                               /_/              Official
+```
