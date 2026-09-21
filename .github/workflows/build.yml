@@ -200,6 +200,17 @@ jobs:
           cp app/src/main/assets/ksud ./ksud
           echo "source=vendored (checked-in asset)" >> "$GITHUB_ENV"
 
+      - name: Repoint Cargo git deps (Kernel-SU -> KernelSU2 org rename)
+        if: steps.method.outputs.method == 'source'
+        run: |
+          cd kernelsu
+          MANIFESTS="userspace/ksud/Cargo.toml userspace/ksuinit/Cargo.toml"
+          before=$(grep -hc "github.com/Kernel-SU/" $MANIFESTS | awk '{s+=$1} END{print s+0}')
+          sed -i 's#github.com/Kernel-SU/#github.com/KernelSU2/#g' $MANIFESTS
+          after=$(grep -hc "github.com/KernelSU2/" $MANIFESTS | awk '{s+=$1} END{print s+0}')
+          echo "Cargo git deps repointed: $before -> $after (expect 4 live under KernelSU2)"
+          test "$before" -gt 0
+
       - name: Set up Rust toolchain
         if: steps.method.outputs.method == 'source'
         run: |
