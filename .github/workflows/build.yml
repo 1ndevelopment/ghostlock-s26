@@ -307,11 +307,12 @@ jobs:
           name: ksud
           path: ksud-artifact
 
-      - name: Overlay ksud into app assets
+      - name: Stage fresh ksud (routed through stage-assets.sh)
         run: |
-          cp ksud-artifact/ksud app/src/main/assets/ksud
-          chmod 644 app/src/main/assets/ksud
-          sha256sum app/src/main/assets/ksud
+          mkdir -p exploit/build/bin
+          cp -f ksud-artifact/ksud exploit/build/bin/ksud
+          chmod 644 exploit/build/bin/ksud
+          sha256sum exploit/build/bin/ksud
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
