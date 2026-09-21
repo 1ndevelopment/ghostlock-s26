@@ -322,8 +322,28 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Set up Android SDK (cmdline-tools 16.0 on ubuntu-24.04 drops the legacy
+            "tools" package, so install exactly what AGP needs directly)
+        run: |
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          set -eu
+          for l in "$ANDROID_HOME"/licenses/android-sdk-license*; do
+            test -f "$l" || continue
+          done
+          yes | "$SDKM" --licenses >/dev/null 2>&1 || true
+          "$SDKM" --install \
+            "platform-tools" "tools" \
+            "platforms;android-35" \
+            "build-tools;34.0.0" "build-tools;35.0.0" \
+            >/dev/null 2>&1 || {
+              echo "::warning::legacy 'tools' not installable on cmdline-tools 16.0; installing the AGP-required components without it"
+              yes | "$SDKM" --install \
+                "platform-tools" \
+                "platforms;android-35" \
+                "build-tools;34.0.0" "build-tools;35.0.0" >/dev/null
+            }
+          test -d "$ANDROID_HOME/platforms/android-35"
+          ls "$ANDROID_HOME/build-tools/"
 
       - name: Install Android NDK (for native payloads)
         run: |
