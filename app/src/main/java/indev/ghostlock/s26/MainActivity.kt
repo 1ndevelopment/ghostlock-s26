@@ -16,6 +16,8 @@ import android.text.style.ForegroundColorSpan
 import android.text.style.StyleSpan
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -39,6 +41,10 @@ class MainActivity : AppCompatActivity() {
     /** Auto-follow the log only while the user is already at its bottom. */
     private var followLog = true
     private val tsFormat = SimpleDateFormat("HH:mm:ss", Locale.US)
+    /** Launches our activity's getter for "allow installs from this app" and,
+     *  once the user comes back from Settings, finishes the KernelSU APK
+     *  install. Stored so the flow survives activity recreation. */
+    private lateinit var installPermissionLauncher: ActivityResultLauncher<Intent>
 
     private val shizukuBinderListener = Shizuku.OnBinderReceivedListener {
         updateShizukuStatus()
@@ -63,6 +69,20 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         b = ActivityMainBinding.inflate(layoutInflater)
         setContentView(b.root)
+
+        // Permission flow for installing the bundled KernelSU Manager APK:
+        // "Install unknown apps" is a system Setting scoped to this package,
+        // so the funnel is dialog -> Settings -> (on return) auto-install.
+        installPermissionLauncher =
+            registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+                if (KernelSuInstaller.canRequestInstalls(this)) {
+                    log("Install permission granted - installing KernelSU Manager.")
+                    runKernelSuInstall()
+                } else {
+                    log("Install permission not granted - KernelSU Manager was not installed.")
+                    toast("Permission not granted - KernelSU not installed")
+                }
+            }
 
         // Edge-to-edge: draw behind the status/nav bars and pad the page by
         // the system-bar insets (incl. cutout) so nothing hides underneath.
@@ -320,25 +340,31 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun installKernelSu() {
-        if (!KernelSuInstaller.canRequestInstalls(this)) {
-            AlertDialog.Builder(this)
-                .setTitle("Allow installs from this app")
-                .setMessage(
-                    "Android requires permission to install apps. " +
-                        "Open settings and allow 'Install unknown apps' for GhostLock."
-                )
-                .setPositiveButton("Open settings") { _, _ ->
-                    startActivity(
-                        Intent(
-                            Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                            Uri.parse("package:$packageName")
-                        )
-                    )
-                }
-                .setNegativeButton("Cancel", null)
-                .show()
+        if (KernelSuInstaller.canRequestInstalls(this)) {
+            runKernelSuInstall()
             return
         }
+        AlertDialog.Builder(this)
+            .setTitle("Allow installs from this app")
+            .setMessage(
+                "Android requires permission to install apps. " +
+                    "Open settings and allow 'Install unknown apps' for GhostLock - " +
+                    "the KernelSU Manager APK installs automatically once granted."
+            )
+            .setPositiveButton("Open settings") { _, _ ->
+                installPermissionLauncher.launch(
+                    Intent(
+                        Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        Uri.parse("package:$packageName")
+                    )
+                )
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    /** Kick off the PackageInstaller session once installs are allowed. */
+    private fun runKernelSuInstall() {
         lifecycleScope.launch {
             log("Installing KernelSU Manager…")
             if (KernelSuInstaller.install(this@MainActivity)) {
