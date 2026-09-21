@@ -366,6 +366,11 @@ class MainActivity : AppCompatActivity() {
     /** Kick off the PackageInstaller session once installs are allowed. */
     private fun runKernelSuInstall() {
         lifecycleScope.launch {
+            if (!KernelSuInstaller.hasBundledApk(this@MainActivity)) {
+                log("kernelsu-manager.apk is not bundled - the install prompt cannot appear. Rebuild with the Manager APK staged.")
+                toast("Manager APK missing from this build")
+                return@launch
+            }
             log("Installing KernelSU Manager…")
             if (KernelSuInstaller.install(this@MainActivity)) {
                 log("Install prompt sent - confirm on screen.")

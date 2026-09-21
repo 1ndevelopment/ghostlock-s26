@@ -10,6 +10,11 @@
 # workflow freshly rebuilt it from polygraphene/KernelSU), that binary is used;
 # otherwise the vendored prebuilt at app/src/main/assets/ksud is kept as-is.
 #
+# The KernelSU Manager APK (me.weishu.kernelsu) is staged from
+# exploit/build/bin/kernelsu-manager.apk (fetched by the CI workflow). It is
+# optional here: without it the in-app "Install KernelSU Manager" flow starts but
+# cannot commit a session, so the build only warns.
+#
 # After staging, build the app:
 #   ./gradlew :app:assembleDebug
 set -eu
@@ -19,6 +24,7 @@ ASSETS="$ROOT/app/src/main/assets"
 PRELOAD="$ROOT/exploit/build/bin/preload.so"
 HELPER="$ROOT/exploit/build/embed/su_daemon_aarch64_pie"
 KSUD_NEW="$ROOT/exploit/build/bin/ksud"
+KSU_MANAGER="$ROOT/exploit/build/bin/kernelsu-manager.apk"
 
 missing=0
 if [ ! -f "$PRELOAD" ]; then
@@ -46,5 +52,17 @@ if [ -f "$KSUD_NEW" ]; then
 else
   echo "ksud: keeping vendored prebuilt at $ASSETS/ksud"
 fi
+
+if [ -f "$KSU_MANAGER" ]; then
+  cp -f "$KSU_MANAGER" "$ASSETS/kernelsu-manager.apk"
+  chmod 644 "$ASSETS/kernelsu-manager.apk"
+  echo "kernelsu-manager.apk: staged from $KSU_MANAGER"
+else
+  echo "kernelsu-manager.apk: MISSING - the in-app KernelSU Manager install flow will not prompt ($KSU_MANAGER absent; fetch it via the CI workflow input 'ksu_manager_apk' or drop it into exploit/build/bin)" >&2
+fi
+
 echo "staged:"
 ls -l "$ASSETS/preload.so" "$ASSETS/su_daemon" "$ASSETS/ksud"
+if [ -f "$ASSETS/kernelsu-manager.apk" ]; then
+  ls -l "$ASSETS/kernelsu-manager.apk"
+fi

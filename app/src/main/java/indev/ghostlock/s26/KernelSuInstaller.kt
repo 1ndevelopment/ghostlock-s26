@@ -4,6 +4,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -27,6 +28,13 @@ object KernelSuInstaller {
     /** Android 8+ gate: the user must allow "install unknown apps" for us. */
     fun canRequestInstalls(context: Context): Boolean =
         context.packageManager.canRequestPackageInstalls()
+
+    /** True when the bundled Manager APK is actually present in assets. */
+    fun hasBundledApk(context: Context): Boolean = try {
+        context.assets.open(ASSET).use { true }
+    } catch (_: Exception) {
+        false
+    }
 
     /**
      * Streams the bundled APK into a PackageInstaller session and commits it.
@@ -58,6 +66,7 @@ object KernelSuInstaller {
                     session.abandon()
                 } catch (_: Exception) {
                 }
+                Log.e(TAG, "PackageInstaller session failed", e)
                 false
             } finally {
                 try {
@@ -66,7 +75,10 @@ object KernelSuInstaller {
                 }
             }
         } catch (e: Exception) {
+            Log.e(TAG, "could not start PackageInstaller session", e)
             false
         }
     }
+
+    private const val TAG = "KernelSuInstaller"
 }

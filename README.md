@@ -112,6 +112,13 @@ only produce the two NDK outputs. The CMake target in
 `app/src/main/cpp/CMakeLists.txt` can additionally rebuild `libpreload.so`
 from the same sources inside the APK as a fallback.
 
+The KernelSU Manager APK (`me.weishu.kernelsu`) is bundled into
+`app/src/main/assets/kernelsu-manager.apk` for the in-app "Install KernelSU
+Manager" flow. The CI fetches it automatically; for local builds drop the
+Manager APK at `exploit/build/bin/kernelsu-manager.apk` before running
+`./stage-assets.sh` (it warns if absent - the install prompt cannot appear
+without it).
+
 ## On-device build (Termux, aarch64)
 
 The SDK's `aapt2`/NDK are x86_64 and cannot execute on-device. Verified

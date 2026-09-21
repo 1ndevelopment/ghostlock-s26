@@ -110,6 +110,11 @@ on:
         type: boolean
         required: false
         default: false
+      ksu_manager_apk:
+        description: "URL to the KernelSU Manager APK ('me.weishu.kernelsu') bundled into assets so the in-app install flow has something to install"
+        type: string
+        required: false
+        default: "https://github.com/tiann/KernelSU/releases/download/v3.3.0/KernelSU_v3.3.0_32601-release.apk"
       sign_release:
         description: "Sign the release APK with KEYSTORE_BASE64/KEY_ALIAS/KEYSTORE_PASSWORD/KEY_PASSWORD secrets"
         type: boolean
@@ -365,6 +370,15 @@ jobs:
           make preload
           cd ..
           ls -l exploit/build/bin/preload.so exploit/build/embed/su_daemon_aarch64_pie
+
+      - name: Fetch KernelSU Manager APK (bundled installer)
+        run: |
+          set -eu
+          mkdir -p exploit/build/bin
+          curl -fL --retry 3 -o exploit/build/bin/kernelsu-manager.apk \
+            "${{ inputs.ksu_manager_apk }}"
+          file exploit/build/bin/kernelsu-manager.apk
+          ls -l exploit/build/bin/kernelsu-manager.apk
 
       - name: Stage assets into the APK
         run: ./stage-assets.sh
