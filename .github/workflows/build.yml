@@ -8,14 +8,24 @@ name: GhostLock-S26 Device Build
 #   kernel_line -> pin the exact params line (cn / intl / exynos) instead of auto
 #   tailor      -> prune exploit/src/params_table.c + ParamsTable.kt to only the
 #                  selected device/line so the payload ignores everything else
-#   rebuild_ksud-> rebuild the ksud daemon from tiann/KernelSU (Rust), or keep the
-#                  vendored prebuilt in app/src/main/assets/ksud
-#   ksud_ref    -> KernelSU git tag/ref used to (re)build ksud
+#   rebuild_ksud-> rebuild the ksud daemon + kernelsu.ko from polygraphene/KernelSU
+#                  (the S26/KDP-hardened fork; click "Run" on the use of it below),
+#                  or keep the vendored prebuilt in app/src/main/assets/ksud.
+#   ksud_ref    -> polygraphene/KernelSU git commit used to (re)build ksud
+#   kmi         -> target Kernel Module Interface (android16-6.12 = S26 GKI 6.12)
+#   ddk_release -> ylarod/ddk-min image snapshot used for the kernelsu.ko build
+#   samsung_hardening -> build with CONFIG_KSU_SAMSUNG_KDP/RKP/DEFEX=y so the
+#                        module speaks Samsung kdp creds + RKP/DEFEX sync on 6.12
+#   no_patch_text -> disable live text patching (Exynos EL2; see "Exynos 2400" in
+#                    the BuSung-dev payloads README)
 #   sign_release-> sign the release APK with KEYSTORE_BASE64/KEY_ALIAS/... secrets
 #
 # Pipeline:
-#   build-ksud    cross-compiles the KernelSU daemon for arm64 (or snapshots the
-#                 vendored binary) -> uploads a ksud artifact + SHA-256
+#   build-ksud    builds kernelsu.ko inside the KMI DDK container (Samsung KDP/
+#                 RKP/DEFEX flags), drops it into userspace/ksud/bin/aarch64/,
+#                 then cross-compiles ksud for arm64 with NDK r29 so the late-load
+#                 binary embeds the module (or snapshots the vendored prebuilt)
+#                 -> uploads a ksud+kernelsu.ko artifact + SHA-256
 #   build-android overlays that ksud, runs .github/scripts/tailor.py (if tailoring),
 #                 cross-builds exploit/ with the NDK (preload.so + su_daemon),
 #                 stages assets and assembles the APK with Gradle.
@@ -68,15 +78,38 @@ on:
         required: false
         default: false
       rebuild_ksud:
-        description: "Rebuild the ksud daemon from KernelSU source (off = use vendored prebuilt)"
+        description: "Rebuild ksud + kernelsu.ko from polygraphene/KernelSU source (off = use vendored prebuilt)"
         type: boolean
         required: false
         default: true
       ksud_ref:
-        description: "KernelSU git ref used to (re)build ksud"
+        description: "polygraphene/KernelSU git ref used to (re)build ksud + kernelsu.ko"
         type: string
         required: false
-        default: v1.0.5
+        default: a5531763971cf034e3f630d31654189a148e5f81
+      kmi:
+        description: "Target KMI the kernelsu.ko is compiled for (S26 = android16-6.12)"
+        type: choice
+        required: false
+        default: android16-6.12
+        options:
+          - android16-6.12
+          - android15-6.6
+      ddk_release:
+        description: "ylarod/ddk-min snapshot used for the kernelsu.ko build"
+        type: string
+        required: false
+        default: "20260313"
+      samsung_hardening:
+        description: "Build kernelsu.ko with CONFIG_KSU_SAMSUNG_KDP/RKP/DEFEX=y (Samsung kdp creds, RKP/DEFEX sync)"
+        type: boolean
+        required: false
+        default: true
+      no_patch_text:
+        description: "Disable live text patching (required for Samsung Exynos EL2 targets, see BuSung-dev payloads README)"
+        type: boolean
+        required: false
+        default: false
       sign_release:
         description: "Sign the release APK with KEYSTORE_BASE64/KEY_ALIAS/KEYSTORE_PASSWORD/KEY_PASSWORD secrets"
         type: boolean
@@ -93,14 +126,13 @@ permissions:
 
 env:
   KSUD_TARGET: aarch64-linux-android          # ksud ABI (S26 family is arm64-only)
-  NDK_DIR: 27.0.12077973                      # NDK r27c, matches the vendored ksud
-  CROSS_REV: 66845c1
+  NDK_DIR: 27.0.12077973                      # NDK r27c (native exploit payloads)
 
 jobs:
   build-ksud:
-    name: ksud (${{ inputs.ksud_ref }}, ${{ inputs.rebuild_ksud && 'rebuild' || 'vendored' }})
+    name: ksud + kernelsu.ko (${{ inputs.ksud_ref }}, ${{ inputs.rebuild_ksud && 'rebuild' || 'vendored' }})
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     outputs:
       ksud_sha256: ${{ steps.sha.outputs.value }}
     steps:
@@ -116,35 +148,78 @@ jobs:
             echo "method=vendored" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Clone KernelSU source
+      - name: Checkout polygraphene/KernelSU at ksud_ref
         if: steps.method.outputs.method == 'source'
+        uses: actions/checkout@v4
+        with:
+          repository: polygraphene/KernelSU
+          ref: ${{ inputs.ksud_ref }}
+          path: kernelsu
+          fetch-depth: 0
+
+      - name: Build kernelsu.ko (KMI DDK container, Samsung KDP/RKP/DEFEX)
+        if: steps.method.outputs.method == 'source'
+        env:
+          KMI: ${{ inputs.kmi }}
+          DDK_RELEASE: ${{ inputs.ddk_release }}
+          SAMSUNG_HARDENING: ${{ inputs.samsung_hardening }}
+          NO_PATCH_TEXT: ${{ inputs.no_patch_text }}
         run: |
-          git clone --depth 1 --branch "${{ inputs.ksud_ref }}" \
-            https://github.com/tiann/KernelSU.git kernelsu
-          test -f kernelsu/userspace/ksud/Cargo.toml \
-            || { echo "::error::${{ inputs.ksud_ref }} has no userspace/ksud (Rust ksud)"; exit 1; }
-          if [ -f kernelsu/.github/scripts/setup-rust-build.sh ]; then
-            echo "ksud_method=native" >> "$GITHUB_ENV"
-          else
-            echo "ksud_method=cross" >> "$GITHUB_ENV"
+          set -eu
+          KSU_CONFIG="CONFIG_KSU=m"
+          if [ "$SAMSUNG_HARDENING" = "true" ]; then
+            KSU_CONFIG="$KSU_CONFIG CONFIG_KSU_SAMSUNG_KDP=y CONFIG_KSU_SAMSUNG_RKP=y CONFIG_KSU_SAMSUNG_DEFEX=y"
           fi
-          echo "source=${{ inputs.ksud_ref }}" >> "$GITHUB_ENV"
+          if [ "$NO_PATCH_TEXT" = "true" ]; then
+            KSU_CONFIG="$KSU_CONFIG CONFIG_KSU_SAMSUNG_NO_PATCH_TEXT=y"
+          fi
+          echo "KSU_CONFIG=$KSU_CONFIG"
+          docker run --rm \
+            -v "$PWD/kernelsu:/workspace/kernelsu" \
+            -w /workspace/kernelsu/kernel \
+            -e KSU_CONFIG="$KSU_CONFIG" \
+            "ghcr.io/ylarod/ddk-min:${KMI}-${DDK_RELEASE}" \
+            bash -lc '
+              set -eu
+              echo "== KDIR=$KDIR =="
+              echo "== building with: env $KSU_CONFIG make =="
+              env $KSU_CONFIG make
+              echo "== stripping + embedding =="
+              llvm-strip -d kernelsu.ko
+              echo "== vermagic =="
+              llvm-readelf -p .modinfo kernelsu.ko 2>/dev/null | grep -i vermagic || true
+              mkdir -p /workspace/kernelsu/userspace/ksud/bin/aarch64
+              cp kernelsu.ko "/workspace/kernelsu/userspace/ksud/bin/aarch64/${KMI}_kernelsu.ko"
+            '
+          ls -l "kernelsu/userspace/ksud/bin/aarch64/${KMI}_kernelsu.ko"
+
+      - name: Snapshot vendored ksud
+        if: steps.method.outputs.method == 'vendored'
+        run: |
+          cp app/src/main/assets/ksud ./ksud
+          echo "source=vendored (checked-in asset)" >> "$GITHUB_ENV"
 
       - name: Set up Rust toolchain
-        if: env.ksud_method == 'native'
+        if: steps.method.outputs.method == 'source'
         run: |
           rustup update stable
           rustup target add "$KSUD_TARGET"
 
-      - name: Set up Android NDK r27c
-        if: env.ksud_method == 'native'
+      - name: Install libclang (bindgen for ksud uapi headers)
+        if: steps.method.outputs.method == 'source'
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q libclang-dev clang
+
+      - name: Set up Android NDK r29
+        if: steps.method.outputs.method == 'source'
         id: ndk
         uses: nttld/setup-ndk@v1
         with:
-          ndk-version: r27c
+          ndk-version: r29
 
-      - name: Build ksud (cargo + NDK linker, main/dev)
-        if: env.ksud_method == 'native'
+      - name: Build ksud (cargo + NDK r29, polygraphene/KernelSU fork)
+        if: steps.method.outputs.method == 'source'
         env:
           ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
         run: |
@@ -152,21 +227,8 @@ jobs:
           source .github/scripts/setup-rust-build.sh "$KSUD_TARGET" 26
           cargo build --target "$TRIPLE" --release --manifest-path ./userspace/ksud/Cargo.toml
           cd ..
-          cp kernelsu/userspace/ksud/target/$KSUD_TARGET/release/ksud ./ksud
-
-      - name: Build ksud (cross, tagged releases)
-        if: env.ksud_method == 'cross'
-        run: |
-          cargo install cross --git https://github.com/cross-rs/cross --rev "$CROSS_REV"
-          CROSS_NO_WARNINGS=0 cross build --target "$KSUD_TARGET" --release \
-            --manifest-path ./kernelsu/userspace/ksud/Cargo.toml
-          cp kernelsu/userspace/ksud/target/$KSUD_TARGET/release/ksud ./ksud
-
-      - name: Snapshot vendored ksud
-        if: steps.method.outputs.method == 'vendored'
-        run: |
-          cp app/src/main/assets/ksud ./ksud
-          echo "source=vendored (checked-in asset)" >> "$GITHUB_ENV"
+          cp "$PWD/kernelsu/target/$KSUD_TARGET/release/ksud" ./ksud
+          echo "source=${{ inputs.ksud_ref }}" >> "$GITHUB_ENV"
 
       - name: Package ksud artifact
         id: sha
@@ -176,12 +238,23 @@ jobs:
           echo "value=$SHA" >> "$GITHUB_OUTPUT"
           {
             echo "ksud-target=$KSUD_TARGET"
+            echo "ksud-repo=polygraphene/KernelSU"
+            echo "ksud-ref=${{ inputs.ksud_ref }}"
             echo "ksud-source=$source"
+            echo "kmi=${{ inputs.kmi }}"
             echo "ksud-sha256=$SHA"
+            if [ -f "kernelsu/userspace/ksud/bin/aarch64/${{ inputs.kmi }}_kernelsu.ko" ]; then
+              echo "ksud-embeds=${{ inputs.kmi }}_kernelsu.ko"
+              echo "kernelsu-ko-sha256=$(sha256sum kernelsu/userspace/ksud/bin/aarch64/${{ inputs.kmi }}_kernelsu.ko | cut -d' ' -f1)"
+            fi
           } > ksud-provenance.txt
           mkdir -p dist
           cp ksud dist/ksud
           cp ksud-provenance.txt dist/ksud-provenance.txt
+          if [ -f "kernelsu/userspace/ksud/bin/aarch64/${{ inputs.kmi }}_kernelsu.ko" ]; then
+            cp "kernelsu/userspace/ksud/bin/aarch64/${{ inputs.kmi }}_kernelsu.ko" \
+               "dist/${{ inputs.kmi }}_kernelsu.ko"
+          fi
 
       - name: Upload ksud artifact
         uses: actions/upload-artifact@v4
@@ -322,6 +395,9 @@ jobs:
           cp exploit/build/embed/su_daemon_aarch64_pie dist/su_daemon
           cp ksud-artifact/ksud dist/ksud
           cp ksud-artifact/ksud-provenance.txt dist/ksud-provenance.txt
+          if ls ksud-artifact/*_kernelsu.ko >/dev/null 2>&1; then
+            cp ksud-artifact/*_kernelsu.ko dist/
+          fi
           cp matrix.json dist/build-matrix.json
           git rev-parse HEAD > dist/GIT_SHA
 
