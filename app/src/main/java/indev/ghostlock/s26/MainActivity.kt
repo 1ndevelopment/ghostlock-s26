@@ -152,9 +152,9 @@ class MainActivity : AppCompatActivity() {
         }
         // The console scrolls on its own: only auto-follow while the user is
         // already at the bottom - never yank them away from reading.
-        b.logScroll.setOnScrollChangeListener { v, _, scrollY, _, _ ->
-            val content = v.getChildAt(0)
-            followLog = content == null || scrollY + v.height >= content.height - 32
+        b.logScroll.setOnScrollChangeListener { _, _, scrollY, _, _ ->
+            val content = b.logScroll.getChildAt(0)
+            followLog = content == null || scrollY + b.logScroll.height >= content.height - 32
         }
         log("Tap Root my S26. It checks the device, stages the payload, runs the exploit (retries - the race is probabilistic), and verifies root.")
         // Probe once at launch; onResume re-probes (temp root is gone after reboot).
