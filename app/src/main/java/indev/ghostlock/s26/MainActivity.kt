@@ -153,8 +153,8 @@ class MainActivity : AppCompatActivity() {
         // The console scrolls on its own: only auto-follow while the user is
         // already at the bottom - never yank them away from reading.
         b.logScroll.setOnScrollChangeListener { v, _, scrollY, _, _ ->
-            val child = (v as android.widget.ScrollView).getChildAt(0)
-            followLog = child == null || scrollY + v.height >= child.bottom - 48
+            val content = v.getChildAt(0)
+            followLog = content == null || scrollY + v.height >= content.height - 32
         }
         log("Tap Root my S26. It checks the device, stages the payload, runs the exploit (retries - the race is probabilistic), and verifies root.")
         // Probe once at launch; onResume re-probes (temp root is gone after reboot).
@@ -472,7 +472,23 @@ class MainActivity : AppCompatActivity() {
             b.logView.append(sb)
             b.logView.append("\n")
             if (followLog) {
-                b.logScroll.post { b.logScroll.fullScroll(android.view.View.FOCUS_DOWN) }
+                scrollToBottom()
+            }
+        }
+    }
+
+    /**
+     * Pin the console to the newest line. Runs after layout so the measured
+     * content height is current - fullScroll(FOCUS_DOWN) can land short of the
+     * last line during a fast append burst (each append posts its own pin, so
+     * every burst settles on the final line).
+     */
+    private fun scrollToBottom() {
+        val view = b.logScroll
+        view.post {
+            val content = view.getChildAt(0) ?: return@post
+            if (followLog) {
+                view.scrollTo(0, (content.height - view.height).coerceAtLeast(0))
             }
         }
     }
