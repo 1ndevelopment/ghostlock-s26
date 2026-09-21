@@ -178,6 +178,7 @@ jobs:
             -v "$PWD/kernelsu:/workspace/kernelsu" \
             -w /workspace/kernelsu/kernel \
             -e KSU_CONFIG="$KSU_CONFIG" \
+            -e KMI="${KMI}" \
             "ghcr.io/ylarod/ddk-min:${KMI}-${DDK_RELEASE}" \
             bash -lc '
               set -eu
