@@ -1,0 +1,344 @@
+name: GhostLock-S26 Device Build
+
+# Manually builds a GhostLock APK + the ksud daemon tailored to a specific
+# Galaxy S26 device / SoC / kernel line.
+#
+#   device      -> m1q/m2q/m3q (Snapdragon), m1s/m2s (Exynos), or the whole family
+#   processor   -> snapdragon / exynos / both (filters the kernel lines at build time)
+#   kernel_line -> pin the exact params line (cn / intl / exynos) instead of auto
+#   tailor      -> prune exploit/src/params_table.c + ParamsTable.kt to only the
+#                  selected device/line so the payload ignores everything else
+#   rebuild_ksud-> rebuild the ksud daemon from tiann/KernelSU (Rust), or keep the
+#                  vendored prebuilt in app/src/main/assets/ksud
+#   ksud_ref    -> KernelSU git tag/ref used to (re)build ksud
+#   sign_release-> sign the release APK with KEYSTORE_BASE64/KEY_ALIAS/... secrets
+#
+# Pipeline:
+#   build-ksud    cross-compiles the KernelSU daemon for arm64 (or snapshots the
+#                 vendored binary) -> uploads a ksud artifact + SHA-256
+#   build-android overlays that ksud, runs .github/scripts/tailor.py (if tailoring),
+#                 cross-builds exploit/ with the NDK (preload.so + su_daemon),
+#                 stages assets and assembles the APK with Gradle.
+
+on:
+  workflow_dispatch:
+    inputs:
+      device:
+        description: "Device codename (build target)"
+        type: choice
+        required: true
+        default: all
+        options:
+          - all       # whole S26 family (17 tested builds)
+          - m1q       # Galaxy S26        (SM-S942x) Snapdragon
+          - m2q       # Galaxy S26+       (SM-S947x) Snapdragon
+          - m3q       # Galaxy S26 Ultra  (SM-S948x) Snapdragon
+          - m1s       # Galaxy S26        (SM-S942B) Exynos
+          - m2s       # Galaxy S26+       (SM-S947B) Exynos
+      processor:
+        description: "Processor type / SoC family"
+        type: choice
+        required: true
+        default: all
+        options:
+          - all             # both Snapdragon and Exynos
+          - snapdragon      # cn + intl kernel lines
+          - exynos          # exynos kernel line
+      kernel_line:
+        description: "Kernel parameter line (auto = derived from device/processor)"
+        type: choice
+        required: true
+        default: auto
+        options:
+          - auto
+          - cn
+          - intl
+          - exynos
+      build_type:
+        description: "Android build type"
+        type: choice
+        required: true
+        default: debug
+        options:
+          - debug
+          - release
+      tailor:
+        description: "Prune params tables to only the selected device/line (smaller single-target payload)"
+        type: boolean
+        required: false
+        default: false
+      rebuild_ksud:
+        description: "Rebuild the ksud daemon from KernelSU source (off = use vendored prebuilt)"
+        type: boolean
+        required: false
+        default: true
+      ksud_ref:
+        description: "KernelSU git ref used to (re)build ksud"
+        type: string
+        required: false
+        default: v1.0.5
+      sign_release:
+        description: "Sign the release APK with KEYSTORE_BASE64/KEY_ALIAS/KEYSTORE_PASSWORD/KEY_PASSWORD secrets"
+        type: boolean
+        required: false
+        default: false
+
+concurrency:
+  group: ghostlock-build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: write
+
+env:
+  KSUD_TARGET: aarch64-linux-android          # ksud ABI (S26 family is arm64-only)
+  NDK_DIR: 27.0.12077973                      # NDK r27c, matches the vendored ksud
+  CROSS_REV: 66845c1
+
+jobs:
+  build-ksud:
+    name: ksud (${{ inputs.ksud_ref }}, ${{ inputs.rebuild_ksud && 'rebuild' || 'vendored' }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      ksud_sha256: ${{ steps.sha.outputs.value }}
+    steps:
+      - name: Checkout (for vendored fallback)
+        uses: actions/checkout@v4
+
+      - name: Pick ksud build method
+        id: method
+        run: |
+          if [ "${{ inputs.rebuild_ksud }}" = "true" ]; then
+            echo "method=source" >> "$GITHUB_OUTPUT"
+          else
+            echo "method=vendored" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Clone KernelSU source
+        if: steps.method.outputs.method == 'source'
+        run: |
+          git clone --depth 1 --branch "${{ inputs.ksud_ref }}" \
+            https://github.com/tiann/KernelSU.git kernelsu
+          test -f kernelsu/userspace/ksud/Cargo.toml \
+            || { echo "::error::${{ inputs.ksud_ref }} has no userspace/ksud (Rust ksud)"; exit 1; }
+          if [ -f kernelsu/.github/scripts/setup-rust-build.sh ]; then
+            echo "ksud_method=native" >> "$GITHUB_ENV"
+          else
+            echo "ksud_method=cross" >> "$GITHUB_ENV"
+          fi
+          echo "source=${{ inputs.ksud_ref }}" >> "$GITHUB_ENV"
+
+      - name: Set up Rust toolchain
+        if: env.ksud_method == 'native'
+        run: |
+          rustup update stable
+          rustup target add "$KSUD_TARGET"
+
+      - name: Set up Android NDK r27c
+        if: env.ksud_method == 'native'
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27c
+
+      - name: Build ksud (cargo + NDK linker, main/dev)
+        if: env.ksud_method == 'native'
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: |
+          cd kernelsu
+          source .github/scripts/setup-rust-build.sh "$KSUD_TARGET" 26
+          cargo build --target "$TRIPLE" --release --manifest-path ./userspace/ksud/Cargo.toml
+          cd ..
+          cp kernelsu/userspace/ksud/target/$KSUD_TARGET/release/ksud ./ksud
+
+      - name: Build ksud (cross, tagged releases)
+        if: env.ksud_method == 'cross'
+        run: |
+          cargo install cross --git https://github.com/cross-rs/cross --rev "$CROSS_REV"
+          CROSS_NO_WARNINGS=0 cross build --target "$KSUD_TARGET" --release \
+            --manifest-path ./kernelsu/userspace/ksud/Cargo.toml
+          cp kernelsu/userspace/ksud/target/$KSUD_TARGET/release/ksud ./ksud
+
+      - name: Snapshot vendored ksud
+        if: steps.method.outputs.method == 'vendored'
+        run: |
+          cp app/src/main/assets/ksud ./ksud
+          echo "source=vendored (checked-in asset)" >> "$GITHUB_ENV"
+
+      - name: Package ksud artifact
+        id: sha
+        run: |
+          file ksud
+          SHA=$(sha256sum ksud | cut -d' ' -f1)
+          echo "value=$SHA" >> "$GITHUB_OUTPUT"
+          {
+            echo "ksud-target=$KSUD_TARGET"
+            echo "ksud-source=$source"
+            echo "ksud-sha256=$SHA"
+          } > ksud-provenance.txt
+          mkdir -p dist
+          cp ksud dist/ksud
+          cp ksud-provenance.txt dist/ksud-provenance.txt
+
+      - name: Upload ksud artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ksud
+          path: dist/
+
+  build-android:
+    name: GhostLock APK (${{ inputs.build_type }})
+    needs: build-ksud
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve target matrix
+        id: matrix
+        run: |
+          python3 .github/scripts/tailor.py \
+            --device "${{ inputs.device }}" \
+            --processor "${{ inputs.processor }}" \
+            --kernel-line "${{ inputs.kernel_line }}" \
+            $( [ "${{ inputs.tailor }}" = "true" ] && echo --tailor ) \
+            > matrix.json
+          cat matrix.json
+          LINES="$(python3 -c 'import json;print(",".join(json.load(open("matrix.json"))["lines"]))')"
+          DEVICES="$(python3 -c 'import json;print(",".join(json.load(open("matrix.json"))["devices"]))')"
+          echo "lines=$LINES" >> "$GITHUB_OUTPUT"
+          echo "devices=$DEVICES" >> "$GITHUB_OUTPUT"
+        shell: bash
+
+      - name: Download ksud
+        uses: actions/download-artifact@v4
+        with:
+          name: ksud
+          path: ksud-artifact
+
+      - name: Overlay ksud into app assets
+        run: |
+          cp ksud-artifact/ksud app/src/main/assets/ksud
+          chmod 644 app/src/main/assets/ksud
+          sha256sum app/src/main/assets/ksud
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK (for native payloads)
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            --install "ndk;$NDK_DIR" >/dev/null
+          test -d "$ANDROID_HOME/ndk/$NDK_DIR"
+
+      - name: Build native payloads (exploit Makefile, NDK clang)
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/${{ env.NDK_DIR }}
+          ANDROID_NDK_ROOT: ${{ env.ANDROID_HOME }}/ndk/${{ env.NDK_DIR }}
+        run: |
+          cd exploit
+          make preload
+          cd ..
+          ls -l exploit/build/bin/preload.so exploit/build/embed/su_daemon_aarch64_pie
+
+      - name: Stage assets into the APK
+        run: ./stage-assets.sh
+
+      - name: Assemble APK
+        run: |
+          ./gradlew :app:assemble${{ inputs.build_type == 'release' && 'Release' || 'Debug' }} \
+            --console=plain
+          ls -l app/build/outputs/apk/${{ inputs.build_type }}
+
+      - name: "Warn: release will be unsigned"
+        if: ${{ inputs.sign_release == 'true' && env.KEYSTORE_BASE64 == '' }}
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          echo "::warning::sign_release=true but KEYSTORE_BASE64 is not set - uploading an unsigned release APK"
+
+      - name: Sign release APK (optional)
+        if: ${{ inputs.build_type == 'release' && inputs.sign_release == 'true' && env.KEYSTORE_BASE64 != '' }}
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          echo "::group::Signing release APK"
+          echo "$KEYSTORE_BASE64" | base64 -d > keystore.jks
+          BUILD_TOOLS="$ANDROID_HOME/build-tools"
+          APKSIGNER="$(find "$BUILD_TOOLS" -name apksigner | sort -V | tail -1)"
+          ZIPALIGN="$(find "$BUILD_TOOLS" -name zipalign | sort -V | tail -1)"
+          RELEASE_DIR=app/build/outputs/apk/release
+          "$ZIPALIGN" -f -p 4 "$RELEASE_DIR/app-release-unsigned.apk" "$RELEASE_DIR/app-release-aligned.apk"
+          "$APKSIGNER" sign \
+            --ks keystore.jks \
+            --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass "env:KEYSTORE_PASSWORD" \
+            --key-pass "env:KEY_PASSWORD" \
+            --out "$RELEASE_DIR/app-release.apk" \
+            "$RELEASE_DIR/app-release-aligned.apk"
+          "$APKSIGNER" verify --print-certs "$RELEASE_DIR/app-release.apk"
+          echo "::endgroup::"
+
+      - name: Package artifacts
+        run: |
+          set -eu
+          mkdir -p dist
+          LINES="${{ steps.matrix.outputs.lines }}"
+          DEVICES="${{ steps.matrix.outputs.devices }}"
+          LABEL="$(python3 -c 'import json; print(json.load(open("matrix.json"))["tailored"] and "tailored" or "full")')"
+
+          if [ "${{ inputs.build_type }}" = "release" ]; then
+            RELEASE_DIR=app/build/outputs/apk/release
+            if [ -f "$RELEASE_DIR/app-release.apk" ]; then
+              APK="$RELEASE_DIR/app-release.apk"
+            else
+              APK="$RELEASE_DIR/app-release-unsigned.apk"
+            fi
+          else
+            APK=app/build/outputs/apk/debug/app-debug.apk
+          fi
+
+          NAME="ghostlock-s26-${DEVICES//,/-}-${LINES//,/-}-${LABEL}-${{ inputs.build_type }}.apk"
+          cp "$APK" "dist/$NAME"
+          cp exploit/build/bin/preload.so dist/preload.so
+          cp exploit/build/embed/su_daemon_aarch64_pie dist/su_daemon
+          cp ksud-artifact/ksud dist/ksud
+          cp ksud-artifact/ksud-provenance.txt dist/ksud-provenance.txt
+          cp matrix.json dist/build-matrix.json
+          git rev-parse HEAD > dist/GIT_SHA
+
+          {
+            echo "GhostLock-S26 build $GITHUB_RUN_NUMBER"
+            echo "git-sha=$(cat dist/GIT_SHA)"
+            echo "apk=$NAME"
+            echo "lines=$LINES devices=$DEVICES label=$LABEL"
+            echo "build-type=${{ inputs.build_type }}"
+            echo "tailor=${{ inputs.tailor }}"
+            echo "ksud-sha256=${{ needs.build-ksud.outputs.ksud_sha256 }}"
+            echo "--- checksums ---"
+            ( cd dist && sha256sum ./* | tee CHECKSUMS.txt )
+          } > dist/build-report.txt
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ghostlock-s26-dist
+          path: dist/

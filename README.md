@@ -1,7 +1,7 @@
 # GhostLock - Android wrapper (`indev.ghostlock.s26`)
 
 One-click Android wrapper for
-[1ndevelopment/ghostlock-s26](https://github.com/1ndevelopment/ghostlock.s26):
+[polygraphene/ghostlock-s26](https://github.com/polygraphene/ghostlock-s26):
 GhostLock (CVE-2026-43499) ported to the **whole Samsung Galaxy S26 series**
 (Android 16 / GKI 6.12). One APK, three kernel lines, runtime parameter
 matching - no per-build app variants.
