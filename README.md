@@ -9,6 +9,12 @@ matching - no per-build app variants.
 > Use only on devices you own or are explicitly authorized to test.
 > Temp root vanishes on reboot. A second exploit run in the same boot can
 > crash the device - reboot before retrying.
+>
+> **Disclaimer:** experimenting with this software involves low-level kernel
+> exploits, root, and boot-time claims. It is provided **AS IS**, without
+> warranty of any kind. You use it entirely at your own risk; the author is
+> **not responsible** for bricked, boot-looped, or otherwise damaged devices,
+> or for any data loss, voided warranties, or damage arising from its use.
 
 ## Coverage: the full S26 family
 
@@ -111,6 +117,40 @@ cd exploit && make preload
 only produce the two NDK outputs. The CMake target in
 `app/src/main/cpp/CMakeLists.txt` can additionally rebuild `libpreload.so`
 from the same sources inside the APK as a fallback.
+
+## CI build (tailored to device / SoC)
+
+The [`.github/workflows/build.yml`](.github/workflows/build.yml) workflow
+builds the app **tailored to the target device codename / processor type** - no
+SDK, NDK, or Docker needed locally. Run it from the repo's **Actions** tab →
+**GhostLock-S26 Device Build** → **Run workflow**, then set:
+
+| Input | Choice | Default | Effect |
+|---|---|---|---|
+| `device` | `all` / `m1q` / `m2q` / `m3q` / `m1s` / `m2s` | `all` | Device codename (build target) |
+| `processor` | `all` / `snapdragon` / `exynos` | `all` | SoC family (filters kernel lines) |
+| `kernel_line` | `auto` / `cn` / `intl` / `exynos` | `auto` | Pin the exact params line (`auto` derives from device/processor) |
+| `tailor` | on / off | off | Prune `params_table.c` + `ParamsTable.kt` to the selected device/line for a smaller single-target payload |
+| `build_type` | `debug` / `release` | `debug` | APK variant |
+| `rebuild_ksud` | on / off | on | Rebuild `ksud` + `kernelsu.ko` from `polygraphene/KernelSU` at `ksud_ref`, or keep the vendored prebuilt |
+| `kmi` | `android16-6.12` / `android15-6.6` | `android16-6.12` | KMI the module is compiled for (S26 = GKI 6.12) |
+| `samsung_hardening` | on / off | on | `CONFIG_KSU_SAMSUNG_KDP/RKP/DEFEX=y` (Samsung kdp creds, RKP/DEFEX sync) |
+| `no_patch_text` | on / off | off | Disable live text patching (Samsung Exynos EL2 targets) |
+
+Plus `ksud_ref`, `ddk_release` and `ksu_manager_apk` for pinning the KernelSU
+source ref / DDK image / bundled Manager APK, and `sign_release` to sign with
+the `KEYSTORE_BASE64` / `KEY_ALIAS` / secrets.
+
+For example, a **Snapdragon-only Galaxy S26 Ultra** build (kernel lines `cn` +
+`intl`, with the other devices pruned out) would be: `device=m3q`,
+`processor=snapdragon`, `tailor=on`.
+
+The pipeline cross-compiles the native payloads (`preload.so` + `su_daemon`)
+with NDK clang, stages assets, and assembles the APK with Gradle; artifacts
+(`ghostlock-s26-<devices>-<lines>-<tailored|full>-debug.apk` plus `preload.so`,
+`su_daemon`, the `ksud` artifacts and checksums) are uploaded to the run's
+**Summary** page. GitHub Actions handles the checkout + Gradle/SDK setup - the
+`Release` build is automatically signed if the secrets above are configured.
 
 The KernelSU Manager APK (`me.weishu.kernelsu`) is bundled into
 `app/src/main/assets/kernelsu-manager.apk` for the in-app "Install KernelSU
