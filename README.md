@@ -122,7 +122,7 @@ from the same sources inside the APK as a fallback.
 
 The [`.github/workflows/build.yml`](.github/workflows/build.yml) workflow
 builds the app **tailored to the target device codename / processor type** - no
-SDK, NDK, or Docker needed locally. Fork the repo, then it from the repo's **Actions** tab →
+SDK, NDK, or Docker needed locally. Fork the repo, then from the repo's **Actions** tab →
 **GhostLock-S26 Device Build** → **Run workflow**, then set:
 
 | Input | Choice | Default | Effect |
